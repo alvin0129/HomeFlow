@@ -1,0 +1,51 @@
+<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>HomeFlow 手機測試版</title><style>
+:root{font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif;color:#17233b;background:#f4f6fb}*{box-sizing:border-box}body{margin:0;padding:20px 16px 70px}main{max-width:520px;margin:auto}h1{margin:0;font-size:29px}h2{font-size:19px;margin:0 0 12px}.muted{color:#65738a;font-size:13px;line-height:1.5}.card{background:white;border-radius:20px;padding:18px;margin-top:16px;box-shadow:0 3px 20px #1e32510a}button,input,select{font:inherit}button{border:0;background:#295ad9;color:white;border-radius:12px;padding:12px 15px;font-weight:600}button.alt{background:#e8eefb;color:#244b9d}button:disabled{opacity:.5}input[type=text]{width:100%;padding:11px;border:1px solid #d6dce9;border-radius:10px;margin:7px 0}input[type=file]{max-width:100%}.row{display:flex;gap:8px;flex-wrap:wrap}.pill{background:#f0f4fc;padding:7px 10px;border-radius:10px;font-size:13px}.screen{background:linear-gradient(160deg,#a6d3ed,#d6c1e5);border:6px solid #202739;border-radius:34px;padding:28px 12px 16px;margin:auto;max-width:320px;min-height:440px}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px 7px}.app{text-align:center;min-width:0}.icon{height:52px;width:52px;margin:auto;border-radius:13px;background:#fff9;display:grid;place-items:center;font-size:25px;box-shadow:0 2px 8px #0001}.label{font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:4px}.dock{margin-top:28px;background:#ffffff70;border-radius:20px;padding:12px 5px}.step{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid #edf0f6;font-size:14px}.step input{margin-top:3px;transform:scale(1.3)}img{max-width:100%;border-radius:10px;margin-top:10px}small{color:#67768e}#preview{display:none}#progress{font-weight:600}#result{font-size:13px;color:#26569a}</style></head><body><main><h1>🏠 HomeFlow</h1><p class="muted">iPhone 主畫面整理｜v0.2｜截圖辨識測試版</p>
+<div class="card"><h2>① 匯入主畫面截圖</h2><input id="shot" type="file" accept="image/*"><img id="preview" alt="主畫面截圖預覽"><p class="muted">可按「開始辨識」嘗試在手機上辨識截圖文字；第一次需要網路載入 OCR 引擎及語言資料。辨識候選必須人工確認，資料不會由本程式上傳至自建伺服器。</p><p><button id="ocr">開始辨識截圖</button></p><div id="candidates"></div><label for="newapp">新增 App 名稱</label><input id="newapp" type="text" placeholder="例如：LINE"><button id="add">新增到清單</button><p id="result" aria-live="polite"></p></div>
+<div class="card"><h2>② 智慧排列設定</h2><div class="row"><button class="alt" id="sample">載入示範 App</button><button class="alt" id="clear">清空清單</button></div><p class="muted" id="apps"></p><label>整理偏好 <select id="mode"><option value="frequent">常用優先</option><option value="category">依功能分類</option></select></label><p><button id="plan">產生整理方案</button></p></div>
+<div class="card"><h2>③ 建議主畫面</h2><div class="screen"><div id="grid" class="grid"></div><div class="dock"><div id="dock" class="grid"></div></div></div><p class="muted">這是排列模擬，不會更動 iPhone 的實際主畫面。</p></div>
+<div class="card"><h2>④ 逐步整理引導</h2><p id="progress">尚未產生整理方案</p><div id="steps"></div><p><button class="alt" id="reset">重設完成進度</button></p></div>
+<p class="muted">隱私：不需帳號、沒有伺服器傳輸。注意：iOS 不允許第三方 App 直接搬動其他 App 的圖示。Safari「加入主畫面」需先將此頁部署到 HTTPS 網址，直接開啟本機 HTML 不等同已安裝 PWA。</p>
+</main><script>
+const catalog={'電話':['通訊','📞'],'訊息':['通訊','💬'],'LINE':['通訊','🟢'],'WhatsApp':['通訊','☎️'],'Safari':['工具','🧭'],'設定':['工具','⚙️'],'相機':['工具','📷'],'照片':['生活','🌄'],'地圖':['生活','🗺️'],'行事曆':['工作','📅'],'備忘錄':['工作','📝'],'郵件':['工作','✉️'],'ChatGPT':['工作','✨'],'YouTube':['娛樂','▶️'],'Netflix':['娛樂','🎬'],'Spotify':['娛樂','🎵'],'銀行':['金融','🏦'],'股票':['金融','📈'],'錢包':['金融','💳'],'天氣':['生活','🌤️']};
+const sample=['電話','訊息','LINE','Safari','相機','照片','地圖','行事曆','備忘錄','ChatGPT','YouTube','Spotify','銀行','股票','設定','天氣'];
+let apps=[], plan=[],done=[],ocrNames=[];const $=id=>document.getElementById(id);
+function save(){localStorage.setItem('homeflow-apps',JSON.stringify(apps));}
+function renderApps(){$('apps').textContent=apps.length?`${apps.length} 個 App：${apps.join('、')}`:'目前沒有 App，請載入示範或新增。';}
+function icon(name){const e=document.createElement('div');e.className='app';const i=document.createElement('div');i.className='icon';i.textContent=(catalog[name]||['其他','📱'])[1];const l=document.createElement('div');l.className='label';l.textContent=name;e.append(i,l);return e}
+function renderPlan(){let order=[...apps];if($('mode').value==='category')order.sort((a,b)=>(catalog[a]?.[0]||'其他').localeCompare(catalog[b]?.[0]||'其他','zh-Hant'));const preferred=['電話','訊息','LINE','Safari'];const dock=preferred.filter(x=>order.includes(x)).slice(0,4);const rest=order.filter(x=>!dock.includes(x));$('grid').replaceChildren(...rest.slice(0,20).map(icon));$('dock').replaceChildren(...dock.map(icon));plan=[...dock.map((x,i)=>`將「${x}」放入 Dock 第 ${i+1} 格`),...rest.map((x,i)=>`將「${x}」放到第 ${Math.floor(i/20)+1} 頁，位置 ${i%20+1}`)];done=plan.map(()=>false);renderSteps()}
+function renderSteps(){$('steps').replaceChildren();$('progress').textContent=plan.length?`已完成 ${done.filter(Boolean).length} / ${plan.length} 步`:'尚未產生整理方案';plan.forEach((s,i)=>{const d=document.createElement('label');d.className='step';const c=document.createElement('input');c.type='checkbox';c.checked=done[i];c.addEventListener('change',()=>{done[i]=c.checked;$('progress').textContent=`已完成 ${done.filter(Boolean).length} / ${plan.length} 步`});const t=document.createElement('span');t.textContent=s;d.append(c,t);$('steps').append(d)})}
+$('sample').onclick=()=>{apps=[...sample];save();renderApps();renderPlan()};$('clear').onclick=()=>{apps=[];save();renderApps();renderPlan()};$('add').onclick=()=>{const s=$('newapp').value.trim();if(!s)return;if(!apps.includes(s))apps.push(s);save();renderApps();$('newapp').value='';$('result').textContent=`已加入「${s}」，請重新產生整理方案。`};$('plan').onclick=renderPlan;$('mode').onchange=renderPlan;$('reset').onclick=()=>{done=plan.map(()=>false);renderSteps()};function cleanCandidate(raw){
+let t=raw.trim().replace(/[|•·]/g,'').replace(/\s+/g,' ');
+if(!t||t.length>24||/^\d{1,2}[:：]\d{2}$/.test(t)||/^(搜尋|search|編輯|完成|電信|星期|週[一二三四五六日]|[0-9% ]+)$/.test(t))return '';
+return t;
+}
+function showCandidates(names){
+const box=$('candidates');box.replaceChildren();ocrNames=[...new Set(names.map(cleanCandidate).filter(Boolean))];
+if(!ocrNames.length){box.textContent='未辨識出候選名稱；請手動新增 App。';return}
+const note=document.createElement('p');note.className='muted';note.textContent='請只勾選確定是 App 名稱的項目（OCR 也可能辨識到時間或小工具文字）：';box.append(note);
+ocrNames.forEach(n=>{const label=document.createElement('label');label.className='step';const cb=document.createElement('input');cb.type='checkbox';cb.checked=!!catalog[n];cb.dataset.name=n;const inp=document.createElement('input');inp.type='text';inp.value=n;inp.setAttribute('aria-label','修正候選名稱');label.append(cb,inp);box.append(label)});
+const btn=document.createElement('button');btn.textContent='確認候選並更新排列';btn.onclick=()=>{
+let selected=[...box.querySelectorAll('label.step')].filter(x=>x.querySelector('input[type=checkbox]').checked).map(x=>x.querySelector('input[type=text]').value.trim()).filter(Boolean);
+apps=[...new Set([...apps,...selected])];save();renderApps();renderPlan();$('result').textContent=`已加入 ${selected.length} 個確認項目。`};box.append(btn)
+}
+$('ocr').onclick=async()=>{
+const file=$('shot').files[0];if(!file){$('result').textContent='請先選擇主畫面截圖。';return}
+const btn=$('ocr');btn.disabled=true;$('result').textContent='正在載入 OCR 引擎（首次需要網路）…';
+try{
+if(!window.Tesseract){
+await new Promise((resolve,reject)=>{const el=document.createElement('script');el.src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';el.onload=resolve;el.onerror=()=>reject(Error('OCR 套件無法下載'));document.head.append(el)})
+}
+$('result').textContent='正在辨識文字，可能需要一段時間…';
+const worker=await Tesseract.createWorker('eng+chi_tra',1,{logger:m=>{if(m.status==='recognizing text')$('result').textContent=`辨識中：${Math.round((m.progress||0)*100)}%`}});
+try{
+const out=await worker.recognize(file);
+const lines=(out.data.text||'').split(/\n+/).flatMap(x=>x.split(/\s{2,}/));
+showCandidates(lines);
+$('result').textContent=`辨識完成，找到 ${ocrNames.length} 個文字候選；請人工確認。`;
+}finally{await worker.terminate()}
+}catch(e){$('result').textContent=`辨識未完成：${e.message}。請確認網路或改用手動新增。`}
+finally{btn.disabled=false}
+};
+$('shot').onchange=e=>{const f=e.target.files[0];if(!f)return;const reader=new FileReader();reader.onload=()=>{$('preview').src=reader.result;$('preview').style.display='block';$('result').textContent='截圖已在本機載入；請點「開始辨識截圖」啟動 OCR。'};reader.readAsDataURL(f)};
+try{apps=JSON.parse(localStorage.getItem('homeflow-apps')||'[]')}catch{}if(!Array.isArray(apps))apps=[];if(!apps.length)apps=[...sample];renderApps();renderPlan();
+</script></body></html>
